@@ -147,8 +147,8 @@
     </div>
   </div>
 
-  <script>
-    const tableBody = document.getElementById('tableBody');
+<script>
+const tableBody = document.getElementById('tableBody');
 const addRowBtn = document.getElementById('addRowBtn');
 const exportBtn = document.getElementById('exportBtn');
 const mcnSidebarList = document.getElementById('mcnSidebarList');
@@ -289,13 +289,28 @@ function addRow(index, presetName = '') {
   const tdSign = document.createElement('td');
   const signBtn = document.createElement('button');
   signBtn.textContent = 'Sign';
+
+  const sigPreview = document.createElement('img');
+  sigPreview.style.maxHeight = '40px';
+  sigPreview.style.marginTop = '5px';
+  sigPreview.style.display = 'none';
+
   signBtn.addEventListener('click', () => {
     currentSignRow = tr;
     signatureModal.classList.add('open');
     ctx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
   });
+
   tdSign.appendChild(signBtn);
+  tdSign.appendChild(sigPreview);
   tr.appendChild(tdSign);
+
+  // Load existing signature from localStorage if available
+  const storedSig = localStorage.getItem('signature_' + presetName);
+  if (storedSig) {
+    sigPreview.src = storedSig;
+    sigPreview.style.display = 'block';
+  }
 
   tableBody.appendChild(tr);
 }
@@ -325,44 +340,61 @@ addRowBtn.addEventListener('click', () => {
 
 saveSigBtn.addEventListener('click', () => {
   if (!currentSignRow) return;
-  let nameVal = currentSignRow.querySelector('.nameInput').value.trim() || 'untitled';
-  const fileName = nameVal.replace(/\s+/g, '_') + '_signature.png';
+  const nameVal = currentSignRow.querySelector('.nameInput').value.trim() || 'untitled';
   const dataURL = signatureCanvas.toDataURL('image/png');
+  const fileName = nameVal.replace(/\s+/g, '_') + '_signature.png';
+
   try {
     localStorage.setItem('signature_' + nameVal, dataURL);
   } catch (e) {
     console.warn('Signature save failed.');
   }
+
+  const sigImg = currentSignRow.querySelector('img');
+  sigImg.src = dataURL;
+  sigImg.style.display = 'block';
+
   const link = document.createElement('a');
   link.href = dataURL;
   link.download = fileName;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+
   signatureModal.classList.remove('open');
 });
-clearSigBtn.addEventListener('click', () => ctx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height));
-closeModalBtn.addEventListener('click', () => signatureModal.classList.remove('open'));
+
+clearSigBtn.addEventListener('click', () => {
+  ctx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+});
+
+closeModalBtn.addEventListener('click', () => {
+  signatureModal.classList.remove('open');
+});
 
 exportBtn.addEventListener('click', () => {
   const wb = XLSX.utils.book_new();
-  const wsData = [['#', 'Name', 'MCN Set #1', 'MCN Set #2', 'Battery #1', 'Battery #2', 'Status']];
+  const wsData = [['#', 'Name', 'MCN Set #1', 'MCN Set #2', 'Battery #1', 'Battery #2', 'Status', 'Signature']];
+
   tableBody.querySelectorAll('tr').forEach((row, i) => {
-    const cells = row.querySelectorAll('td');
-    const name = cells[1].querySelector('input')?.value || '';
-    const mcn1 = cells[2].querySelector('input')?.value || '';
-    const mcn2 = cells[3].querySelector('input')?.value || '';
-    const bat1 = cells[4].querySelector('input')?.value || '';
-    const bat2 = cells[5].querySelector('input')?.value || '';
-    const status = cells[6].querySelector('.statusIndicator')?.classList.contains('green') ? 'Issued' : 'Not Issued';
-    wsData.push([i + 1, name, mcn1, mcn2, bat1, bat2, status]);
+    const name = row.querySelector('.nameInput')?.value || '';
+    const mcn1 = row.querySelectorAll('.mcnInput')[0]?.value || '';
+    const mcn2 = row.querySelectorAll('.mcnInput')[1]?.value || '';
+    const bat1 = row.querySelectorAll('td')[4]?.querySelector('input')?.value || '';
+    const bat2 = row.querySelectorAll('td')[5]?.querySelector('input')?.value || '';
+    const status = row.querySelector('.statusIndicator')?.classList.contains('green') ? 'Issued' : 'Not Issued';
+    const sigImg = row.querySelector('img');
+    const sigNote = sigImg?.src?.startsWith('data:image') ? 'Saved' : 'Not Signed';
+
+    wsData.push([i + 1, name, mcn1, mcn2, bat1, bat2, status, sigNote]);
   });
+
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   XLSX.utils.book_append_sheet(wb, ws, 'Issued Equipment');
   XLSX.writeFile(wb, 'equipment_issued.xlsx');
 });
+</script>
 
-  </script>
 
 </body>
 </html>
